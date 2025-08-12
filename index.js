@@ -1,47 +1,69 @@
-
-// n8n Keep Alive & System Monitor
-const express = require('express');
-const axios = require('axios');
-const fs = require('fs');
-const path = require('path');
+import express from 'express';
+import { Pool } from 'pg';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const LOG_FILE = path.join(__dirname, 'status.log');
 
-// Função para salvar status no log
-function logStatus(message) {
-    const timestamp = new Date().toISOString();
-    fs.appendFileSync(LOG_FILE, `[${timestamp}] ${message}\n`);
+// ---- Postgres (Neon) via ENVs ----
+const {
+  DB_POSTGRESDB_HOST,
+  DB_POSTGRESDB_PORT = '5432',
+  DB_POSTGRESDB_USER,
+  DB_POSTGRESDB_PASSWORD,
+  DB_POSTGRESDB_DATABASE,
+  DB_POSTGRESDB_SSL_MODE = 'require',
+  DB_POSTGRESDB_SSL_CA
+} = process.env;
+
+function buildSsl() {
+  // Neon aceita sslmode=require sem CA. Se você colar o CA (PEM), usamos validação estrita.
+  if (DB_POSTGRESDB_SSL_CA && DB_POSTGRESDB_SSL_CA.trim()) {
+    return { rejectUnauthorized: true, ca: DB_POSTGRESDB_SSL_CA };
+  }
+  // Sem CA explícito, mantemos SSL ativo sem validar cadeia (Neon usa CA pública)
+  return DB_POSTGRESDB_SSL_MODE === 'require' ? { rejectUnauthorized: false } : false;
 }
 
-// Rota principal
-app.get('/', (req, res) => {
-    res.json({ ok: true, service: "n8n3_keepalive", time: new Date().toISOString() });
+const pool = new Pool({
+  host: DB_POSTGRESDB_HOST,
+  port: Number(DB_POSTGRESDB_PORT),
+  user: DB_POSTGRESDB_USER,
+  password: DB_POSTGRESDB_PASSWORD,
+  database: DB_POSTGRESDB_DATABASE,
+  ssl: buildSsl()
 });
 
-// Rota de status
-app.get('/status', (req, res) => {
-    try {
-        const log = fs.readFileSync(LOG_FILE, 'utf8');
-        res.type('text/plain').send(log);
-    } catch (e) {
-        res.status(500).send("Erro ao ler log");
-    }
+// ---- Rotas ----
+app.get('/healthz', (_req, res) => {
+  res.json({ ok: true, service: 'miguel-orchestrator', time: new Date().toISOString() });
 });
 
-// Função de ping automático
-setInterval(async () => {
-    try {
-        await axios.get(`http://localhost:${PORT}`);
-        logStatus("Ping interno OK");
-    } catch (err) {
-        logStatus("Falha no ping interno");
-    }
-}, 5 * 60 * 1000); // a cada 5 min
+app.get('/db/ping', async (_req, res) => {
+  try {
+    const r = await pool.query('select 1 as ok');
+    res.json({ ok: true, db: r.rows[0] });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
 
-// Iniciar servidor
+// Exemplo: salvar um segredo simples no Neon (tabela config)
+app.get('/db/init-config', async (_req, res) => {
+  try {
+    await pool.query(`
+      create table if not exists config (
+        id serial primary key,
+        key text unique not null,
+        value text not null
+      )
+    `);
+    res.json({ ok: true, message: 'Tabela config pronta' });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
 app.listen(PORT, () => {
-    logStatus(`Servidor iniciado na porta ${PORT}`);
-    console.log(`n8n Keep Alive rodando na porta ${PORT}`);
+  console.log(`🚀 Miguel Orchestrator on :${PORT}`);
 });
+
