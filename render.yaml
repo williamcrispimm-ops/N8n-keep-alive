@@ -1,54 +1,36 @@
 services:
   - type: web
-    name: n8n-keepalive-alerts
+    name: miguel-n8n-keepalive-orchestrator
     env: node
     plan: free
     branch: main
-    buildCommand: npm install
-    startCommand: npx n8n start
+    buildCommand: "npm install"
+    startCommand: "npm start"
+    healthCheckPath: "/healthz"
     envVars:
-      # Segurança
-      - key: N8N_ENCRYPTION_KEY
-        value: SUA_CHAVE_GRANDE_ALEATORIA
-      - key: N8N_BASIC_AUTH_ACTIVE
-        value: "true"
-      - key: N8N_BASIC_AUTH_USER
-        value: seu_usuario
-      - key: N8N_BASIC_AUTH_PASSWORD
-        value: sua_senha
-      - key: GENERIC_TIMEZONE
-        value: America/Sao_Paulo
-      - key: EXECUTIONS_PROCESS
-        value: main
-
-      # Banco (Neon Postgres) — substitua pelos seus dados
-      - key: DB_TYPE
-        value: postgresdb
+      # Postgres (Neon)
       - key: DB_POSTGRESDB_HOST
-        value: <host>.neon.tech
+        value: "ep-plain-fire-acfan4ne-pooler.sa-east-1.aws.neon.tech"
       - key: DB_POSTGRESDB_PORT
         value: "5432"
-      - key: DB_POSTGRESDB_DATABASE
-        value: n8n
       - key: DB_POSTGRESDB_USER
-        value: seu_usuario
+        value: "neondb_owner"
       - key: DB_POSTGRESDB_PASSWORD
         sync: false
+      - key: DB_POSTGRESDB_DATABASE
+        value: "neondb"
+      - key: DB_POSTGRESDB_SSL_MODE
+        value: "require"
       - key: DB_POSTGRESDB_SSL_CA
-        # opcional: se o Neon exigir CA, cole aqui o certificado em PEM
-        sync: false
+        sync: false   # cole aqui o PEM se quiser validar CA
 
-      # Pings (ajuste as URLs reais)
-      - key: PING_RENDER1
-        value: "https://miguel-render-1.onrender.com/ping"
-      - key: PING_RENDER2
-        value: "https://miguel-render-2.onrender.com/ping"
-      - key: PING_N8N1
-        value: "https://n8n-bloco1.onrender.com/healthz"
-      - key: PING_N8N2
-        value: "https://n8n-bloco2.onrender.com/healthz"
-      - key: PING_SELF
-        value: "http://localhost:3000/healthz"
-      - key: TELEGRAM_ALERT_CHAT_ID
-        value: "123456789"
+      # Segurança do app (opcional)
+      - key: GENERIC_TIMEZONE
+        value: "America/Sao_Paulo"
+
+    # Se quiser persistência local por algum motivo, adicione disk; para Neon não é necessário
+    # disk:
+    #   name: data
+    #   mountPath: /data
+    #   sizeGB: 0.3
 
