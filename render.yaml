@@ -1,12 +1,54 @@
 services:
   - type: web
-    name: n8n3-keepalive
+    name: n8n-keepalive-alerts
     env: node
     plan: free
     branch: main
-    buildCommand: "npm install"
-    startCommand: "npm start"
-    disk:
-      name: persistente
-      mountPath: /data
-      sizeGB: 1
+    buildCommand: npm install
+    startCommand: npx n8n start
+    envVars:
+      # Segurança
+      - key: N8N_ENCRYPTION_KEY
+        value: SUA_CHAVE_GRANDE_ALEATORIA
+      - key: N8N_BASIC_AUTH_ACTIVE
+        value: "true"
+      - key: N8N_BASIC_AUTH_USER
+        value: seu_usuario
+      - key: N8N_BASIC_AUTH_PASSWORD
+        value: sua_senha
+      - key: GENERIC_TIMEZONE
+        value: America/Sao_Paulo
+      - key: EXECUTIONS_PROCESS
+        value: main
+
+      # Banco (Neon Postgres) — substitua pelos seus dados
+      - key: DB_TYPE
+        value: postgresdb
+      - key: DB_POSTGRESDB_HOST
+        value: <host>.neon.tech
+      - key: DB_POSTGRESDB_PORT
+        value: "5432"
+      - key: DB_POSTGRESDB_DATABASE
+        value: n8n
+      - key: DB_POSTGRESDB_USER
+        value: seu_usuario
+      - key: DB_POSTGRESDB_PASSWORD
+        sync: false
+      - key: DB_POSTGRESDB_SSL_CA
+        # opcional: se o Neon exigir CA, cole aqui o certificado em PEM
+        sync: false
+
+      # Pings (ajuste as URLs reais)
+      - key: PING_RENDER1
+        value: "https://miguel-render-1.onrender.com/ping"
+      - key: PING_RENDER2
+        value: "https://miguel-render-2.onrender.com/ping"
+      - key: PING_N8N1
+        value: "https://n8n-bloco1.onrender.com/healthz"
+      - key: PING_N8N2
+        value: "https://n8n-bloco2.onrender.com/healthz"
+      - key: PING_SELF
+        value: "http://localhost:3000/healthz"
+      - key: TELEGRAM_ALERT_CHAT_ID
+        value: "123456789"
+
