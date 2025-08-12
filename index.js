@@ -1,12 +1,55 @@
-// --- CRUD simples de segredos na tabela config ---
+import express from 'express';
+import { Pool } from 'pg';
 
-// upsert: grava ou atualiza um valor
-app.post('/db/secret', express.json(), async (req, res) => {
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+// ---- Postgres (Neon) via ENVs ----
+const {
+  DB_POSTGRESDB_HOST,
+  DB_POSTGRESDB_PORT = '5432',
+  DB_POSTGRESDB_USER,
+  DB_POSTGRESDB_PASSWORD,
+  DB_POSTGRESDB_DATABASE,
+  DB_POSTGRESDB_SSL_MODE = 'require',
+  DB_POSTGRESDB_SSL_CA
+} = process.env;
+
+function buildSsl() {
+  // Neon aceita sslmode=require sem CA. Se você colar o CA (PEM), usamos validação estrita.
+  if (DB_POSTGRESDB_SSL_CA && DB_POSTGRESDB_SSL_CA.trim()) {
+    return { rejectUnauthorized: true, ca: DB_POSTGRESDB_SSL_CA };
+  }
+  // Sem CA explícito, mantemos SSL ativo sem validar cadeia (Neon usa CA pública)
+  return DB_POSTGRESDB_SSL_MODE === 'require' ? { rejectUnauthorized: false } : false;
+}
+
+const pool = new Pool({
+  host: DB_POSTGRESDB_HOST,
+  port: Number(DB_POSTGRESDB_PORT),
+  user: DB_POSTGRESDB_USER,
+  password: DB_POSTGRESDB_PASSWORD,
+  database: DB_POSTGRESDB_DATABASE,
+  ssl: buildSsl()
+});
+
+// ---- Rotas ----
+app.get('/healthz', (_req, res) => {
+  res.json({ ok: true, service: 'miguel-orchestrator', time: new Date().toISOString() });
+});
+
+app.get('/db/ping', async (_req, res) => {
   try {
-    const { key, value } = req.body || {};
-    if (!key || typeof value === 'undefined') {
-      return res.status(400).json({ ok: false, error: 'Informe key e value' });
-    }
+    const r = await pool.query('select 1 as ok');
+    res.json({ ok: true, db: r.rows[0] });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// Exemplo: salvar um segredo simples no Neon (tabela config)
+app.get('/db/init-config', async (_req, res) => {
+  try {
     await pool.query(`
       create table if not exists config (
         id serial primary key,
@@ -14,26 +57,13 @@ app.post('/db/secret', express.json(), async (req, res) => {
         value text not null
       )
     `);
-    await pool.query(
-      `insert into config(key, value) values ($1, $2)
-       on conflict(key) do update set value = excluded.value`,
-      [key, String(value)]
-    );
-    res.json({ ok: true, saved: { key } });
+    res.json({ ok: true, message: 'Tabela config pronta' });
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message });
   }
 });
 
-// read: lê um valor pelo key
-app.get('/db/secret/:key', async (req, res) => {
-  try {
-    const { key } = req.params;
-    const r = await pool.query(`select value from config where key = $1`, [key]);
-    if (!r.rowCount) return res.status(404).json({ ok: false, error: 'Não encontrado' });
-    res.json({ ok: true, key, value: r.rows[0].value });
-  } catch (e) {
-    res.status(500).json({ ok: false, error: e.message });
-  }
+app.listen(PORT, () => {
+  console.log(`🚀 Miguel Orchestrator on :${PORT}`);
 });
 
